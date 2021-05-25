@@ -63,4 +63,6 @@ func main() {
 	bc.Print()
 
 	bc.PrintWallets()
+
+	bc.WriteToFile()
 }

@@ -145,7 +145,7 @@ func (bc *BlockChain) WriteToFile() error {
 		return fmt.Errorf("could not serialize blockchain with error %v", err)
 	}
 	// write the blockchain to the file
-	err = ioutil.WriteFile("sjc.blockchain", bin, 0644)
+	err = ioutil.WriteFile("blockchain.json", bin, 0644)
 	if err != nil {
 		return fmt.Errorf("could not wrtie blockchain with error %v", err)
 	}
