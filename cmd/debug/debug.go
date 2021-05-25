@@ -9,13 +9,13 @@ import (
 )
 
 func main() {
-	wal, err := crypto.GenerateWalletFile()
+	wal, err := blockchain.GenerateWalletFile()
 	if err != nil {
 		fmt.Println(err)
 	}
 	fmt.Println("Wallet:", wal)
 
-	keyString, _ := crypto.KeyToString(&wal.KP.PublicKey)
+	keyString, _ := blockchain.KeyToString(&wal.KP.PublicKey)
 
 	bc := blockchain.BlockChain{Wallets: make(map[string]*blockchain.WalletInfo), Blocks: []*model.Block{}}
 

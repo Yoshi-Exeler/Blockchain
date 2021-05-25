@@ -1,6 +1,7 @@
-package crypto
+package blockchain
 
 import (
+	"coins/pkg/crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -45,7 +46,7 @@ func GenerateWalletFile() (*Wallet, error) {
 	// Set the Keypair
 	wallet.KP = privateKey
 	// Generate a wallet address
-	wallet.Address = RandomString(32)
+	wallet.Address = crypto.RandomString(32)
 	// Serialize the Wallet to json
 	bin, err := json.Marshal(wallet)
 	if err != nil {

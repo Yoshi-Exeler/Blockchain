@@ -76,7 +76,7 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 		decodedSignature, _ := base64.StdEncoding.DecodeString(tx.Signature)
 		hash, _ := b.GetHash()
 		decodedHash, _ := base64.StdEncoding.DecodeString(hash)
-		key, _ := crypto.StringToKey(bc.Wallets[tx.Sender].PublicKey)
+		key, _ := StringToKey(bc.Wallets[tx.Sender].PublicKey)
 		if !crypto.VerifySignature(decodedSignature, decodedHash, key) {
 			return false
 		}
