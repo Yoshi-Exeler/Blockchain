@@ -56,6 +56,8 @@ func main() {
 		Registrations: []model.Registration{{Wallet: "testwallet123", PublicKey: "testkey"}, {Wallet: wal.Address, PublicKey: keyString}},
 	}
 
+	secondBlock.Hash, _ = secondBlock.GetHash()
+
 	fmt.Printf("\nSecond Block:%+v\n", testTransaction)
 
 	bc.ProcessBlock(&secondBlock)
