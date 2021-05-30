@@ -3,7 +3,6 @@ package blockchain
 import (
 	"coins/pkg/crypto"
 	"coins/pkg/model"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,7 +16,7 @@ type BlockChain struct {
 
 type Chainstate struct {
 	Wallets           map[string]*WalletInfo // map[WalletAddress]Currency
-	LastBlock         *model.Block
+	LastBlock         model.Block
 	MarketVolume      float64
 	TransactionVolume uint64
 }
@@ -46,7 +45,6 @@ func (bc *BlockChain) PrintWallets() {
 func (bc *BlockChain) ProcessAll() {
 	// Reset the Blockchain
 	bc.Chainstate.Wallets = make(map[string]*WalletInfo)
-	bc.Chainstate.LastBlock = nil
 	bc.Chainstate.MarketVolume = 0
 	bc.Chainstate.TransactionVolume = 0
 	// If transaction blocks actually exist
@@ -55,17 +53,17 @@ func (bc *BlockChain) ProcessAll() {
 		for _, block := range bc.Blocks[1:] {
 			alloc := *block
 			// Validate the Current Block
-			if !bc.ValidateBlock(&alloc) {
+			if !bc.ValidateBlock(alloc) {
 				log.Printf("[BlockChain] Block %v is invalid and will be skipped\n", alloc.ID)
 				continue
 			}
 			// Process the current block
-			bc.ProcessBlock(&alloc)
+			bc.ProcessBlock(alloc)
 		}
 	}
 }
 
-func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
+func (bc *BlockChain) ValidateBlock(b model.Block) bool {
 	// Check that this block is a valid next block
 	if b.Previous != bc.Chainstate.LastBlock.Hash {
 		return false
@@ -85,36 +83,26 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 		}
 	}
 	// Verify that the block is generally a valid Block
-	if !VerifyBlock(b) {
+	if VerifyBlock(b) {
 		// if the block is invalid, we just skip it
 		return false
 	}
 	// Check all transaction signatures
 	for _, tx := range b.Transactions {
-		decodedSignature, err := base64.StdEncoding.DecodeString(tx.Signature)
-		if err != nil {
-			return false
-		}
-		hash, err := b.GetHash()
-		if err != nil {
-			return false
-		}
-		decodedHash, err := base64.StdEncoding.DecodeString(hash)
-		if err != nil {
-			return false
-		}
+		// find the public key of the sender
 		key, err := StringToKey(bc.Chainstate.Wallets[tx.Sender].PublicKey)
 		if err != nil {
 			return false
 		}
-		if !crypto.VerifySignature(decodedSignature, decodedHash, key) {
+		// Verify the transaction
+		if !tx.Verify(key) {
 			return false
 		}
 	}
 	return true
 }
 
-func (bc *BlockChain) ProcessBlock(b *model.Block) error {
+func (bc *BlockChain) ProcessBlock(b model.Block) error {
 	// Process the Registrations in this block
 	for _, reg := range b.Registrations {
 		bc.Chainstate.Wallets[reg.Wallet] = &WalletInfo{}
@@ -133,11 +121,11 @@ func (bc *BlockChain) ProcessBlock(b *model.Block) error {
 	// Set the Lastblock to the processed block
 	bc.Chainstate.LastBlock = b
 	// Append the Block
-	bc.Blocks = append(bc.Blocks, b)
+	bc.Blocks = append(bc.Blocks, &b)
 	return nil
 }
 
-func VerifyBlock(block *model.Block) bool {
+func VerifyBlock(block model.Block) bool {
 	// We dont allow empty blocks
 	if len(block.Registrations) == 0 && len(block.Transactions) == 0 {
 		return false
@@ -155,7 +143,7 @@ func VerifyBlock(block *model.Block) bool {
 
 func ReadFile() (*BlockChain, error) {
 	// Read the blockchain file
-	bin, err := ioutil.ReadFile("sjc.blockchain")
+	bin, err := ioutil.ReadFile("blockchain.json")
 	if err != nil {
 		return nil, fmt.Errorf("could not read blockchain with error %v", err)
 	}

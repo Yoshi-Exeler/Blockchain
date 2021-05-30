@@ -2,7 +2,9 @@ package model
 
 import (
 	"coins/pkg/crypto"
+	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -10,7 +12,7 @@ import (
 
 const BlockReward = float64(1)
 const BlockDiff = byte(3)
-const EmptyBlockDiff = byte(4)
+const EmptyBlockDiff = byte(3)
 
 type Block struct {
 	ID            uint64         // Autoincrement id of the block
@@ -22,9 +24,9 @@ type Block struct {
 	Registrations []Registration // The Registrations that happened in this block
 }
 
-const THREADS = 16
+const THREADS = 2
 
-func (b *Block) Mine() {
+func (b *Block) Mine(stop *bool) {
 	var difficulty byte
 	if len(b.Registrations) > 0 || len(b.Transactions) > 0 {
 		difficulty = BlockDiff
@@ -32,15 +34,14 @@ func (b *Block) Mine() {
 		difficulty = EmptyBlockDiff
 	}
 	signalChannel := make(chan uint64)
-	stop := false
 	for i := 0; i < THREADS; i++ {
 		seed := uint64(rand.Uint32())<<32 + uint64(rand.Uint32())
-		go mine(difficulty, seed, *b, signalChannel, &stop)
+		go mine(difficulty, seed, *b, signalChannel, stop)
 	}
 	result := <-signalChannel
-	stop = true
 	b.Nonce = result
 	b.Hash, _ = b.GetHash()
+	*stop = true
 }
 
 func mine(difficulty byte, seed uint64, block Block, sigChan chan uint64, stop *bool) {
@@ -51,7 +52,9 @@ func mine(difficulty byte, seed uint64, block Block, sigChan chan uint64, stop *
 		}
 		block.Nonce++
 	}
-	sigChan <- block.Nonce
+	if !*stop {
+		sigChan <- block.Nonce
+	}
 }
 
 func (b *Block) hashFast() []byte {
@@ -93,6 +96,25 @@ type Transaction struct {
 	Comment   string  // Comment included with the transaction
 	Hash      string  // The Hash of the Transaction
 	Signature string  // The Signature of the Transaction hash made by the sender
+}
+
+func (tx *Transaction) Verify(publicKey *rsa.PublicKey) bool {
+	decodedSignature, err := base64.StdEncoding.DecodeString(tx.Signature)
+	if err != nil {
+		return false
+	}
+	hash, err := tx.GetHash()
+	if err != nil {
+		return false
+	}
+	decodedHash := crypto.ToBytes(hash)
+	if err != nil {
+		return false
+	}
+	if !crypto.VerifySignature(decodedSignature, decodedHash, publicKey) {
+		return false
+	}
+	return true
 }
 
 func (tx *Transaction) GetHash() (string, error) {

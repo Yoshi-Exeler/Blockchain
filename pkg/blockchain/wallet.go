@@ -62,7 +62,7 @@ func GenerateWalletFile() (*Wallet, error) {
 
 func ReadWalletFile() (*Wallet, error) {
 	// Read the Keypair file
-	bin, err := ioutil.ReadFile("wallet.pck")
+	bin, err := ioutil.ReadFile("wallet.json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wallet file with error %v", err)
 	}

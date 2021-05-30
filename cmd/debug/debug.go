@@ -57,11 +57,13 @@ func main() {
 
 	fmt.Println("Mining the Second Block")
 
-	secondBlock.Mine()
+	stop := false
+
+	secondBlock.Mine(&stop)
 
 	fmt.Printf("\nSecond Block:%+v\n", secondBlock)
 
-	bc.ProcessBlock(&secondBlock)
+	bc.ProcessBlock(secondBlock)
 
 	bc.Print()
 
