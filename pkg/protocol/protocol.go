@@ -5,21 +5,17 @@ import (
 	"coins/pkg/model"
 )
 
+const MESSAGE_DELIMITER = byte(255)
+
 type MessageType byte
 
 const (
 	NEW_BLOCK        MessageType = 1
-	BLOCK_OK         MessageType = 2
-	BLOCK_REJECTED   MessageType = 3
-	NEW_TX           MessageType = 4
-	TX_OK            MessageType = 5
-	TX_REJECTED      MessageType = 6
-	SYNC             MessageType = 7
-	SYNC_STATE_OK    MessageType = 8
-	SYNC_NEXT_BLOCKS MessageType = 9
-	SNYC_BC_INVALID  MessageType = 10
-	INIT             MessageType = 11
-	INIT_BLOCKS      MessageType = 12
+	NEW_TX           MessageType = 2
+	SYNC             MessageType = 3
+	SYNC_NEXT_BLOCKS MessageType = 4
+	INIT             MessageType = 5
+	INIT_BLOCKS      MessageType = 6
 )
 
 type Message struct {
