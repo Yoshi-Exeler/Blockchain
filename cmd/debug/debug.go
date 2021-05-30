@@ -4,7 +4,6 @@ import (
 	"coins/pkg/blockchain"
 	"coins/pkg/crypto"
 	"coins/pkg/model"
-	"encoding/base64"
 	"fmt"
 )
 
@@ -38,9 +37,7 @@ func main() {
 
 	testTransaction.Hash, _ = testTransaction.GetHash()
 
-	decodedHash, _ := base64.StdEncoding.DecodeString(testTransaction.Hash)
-
-	testTransaction.Signature, err = crypto.SignHashB64(decodedHash, wal.KP)
+	testTransaction.Signature, err = crypto.SignHashB64(crypto.ToBytes(testTransaction.Hash), wal.KP)
 	if err != nil {
 		fmt.Printf("Could not sign transaction with error %v\n", err)
 	}
@@ -58,11 +55,9 @@ func main() {
 
 	secondBlock.Hash, _ = secondBlock.GetHash()
 
-	fmt.Println("Hash Difficulty: ", crypto.GetHashDiff([]byte(secondBlock.Hash)))
+	fmt.Println("Mining the Second Block")
 
-	fmt.Println("Test Mining until diff = 4")
-
-	secondBlock.Mine(3)
+	secondBlock.Mine()
 
 	fmt.Printf("\nSecond Block:%+v\n", secondBlock)
 

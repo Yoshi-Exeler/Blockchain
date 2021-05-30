@@ -9,6 +9,8 @@ import (
 )
 
 const BlockReward = float64(1)
+const BlockDiff = byte(3)
+const EmptyBlockDiff = byte(4)
 
 type Block struct {
 	ID            uint64         // Autoincrement id of the block
@@ -22,7 +24,13 @@ type Block struct {
 
 const THREADS = 16
 
-func (b *Block) Mine(difficulty byte) {
+func (b *Block) Mine() {
+	var difficulty byte
+	if len(b.Registrations) > 0 || len(b.Transactions) > 0 {
+		difficulty = BlockDiff
+	} else {
+		difficulty = EmptyBlockDiff
+	}
 	signalChannel := make(chan uint64)
 	stop := false
 	for i := 0; i < THREADS; i++ {

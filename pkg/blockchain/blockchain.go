@@ -70,6 +70,20 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 	if b.Previous != bc.Chainstate.LastBlock.Hash {
 		return false
 	}
+	// Check that the id was incremented correctly
+	if bc.Chainstate.LastBlock.ID+1 != b.ID {
+		return false
+	}
+	// Check that the block has the correct difficulty
+	if len(b.Transactions) > 0 || len(b.Registrations) > 0 {
+		if crypto.GetHashDiff(crypto.ToBytes(b.Hash)) != model.BlockDiff {
+			return false
+		}
+	} else {
+		if crypto.GetHashDiff(crypto.ToBytes(b.Hash)) != model.EmptyBlockDiff {
+			return false
+		}
+	}
 	// Verify that the block is generally a valid Block
 	if !VerifyBlock(b) {
 		// if the block is invalid, we just skip it
@@ -77,10 +91,22 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 	}
 	// Check all transaction signatures
 	for _, tx := range b.Transactions {
-		decodedSignature, _ := base64.StdEncoding.DecodeString(tx.Signature)
-		hash, _ := b.GetHash()
-		decodedHash, _ := base64.StdEncoding.DecodeString(hash)
-		key, _ := StringToKey(bc.Chainstate.Wallets[tx.Sender].PublicKey)
+		decodedSignature, err := base64.StdEncoding.DecodeString(tx.Signature)
+		if err != nil {
+			return false
+		}
+		hash, err := b.GetHash()
+		if err != nil {
+			return false
+		}
+		decodedHash, err := base64.StdEncoding.DecodeString(hash)
+		if err != nil {
+			return false
+		}
+		key, err := StringToKey(bc.Chainstate.Wallets[tx.Sender].PublicKey)
+		if err != nil {
+			return false
+		}
 		if !crypto.VerifySignature(decodedSignature, decodedHash, key) {
 			return false
 		}
