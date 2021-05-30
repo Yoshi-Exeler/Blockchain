@@ -6,23 +6,22 @@ import (
 	"os"
 )
 
-// the job of a node is to propagate transactions to miners and blocks to everyone on the network
-
-// Register for Block Broadcasts at
+const MaxBlocksPerRequest = 100
 
 func main() {
-	blockCastPort := flag.String("block-broadcast-port", "10545", "The port on which new block will be broadcast")
-	txCastPort := flag.String("transaction-broadcast-port", "10546", "The port on which pending transactions will be broadcast")
-	txSubmitPort := flag.String("transaction-submit-port", "10547", "The port on which to submit new transactions")
-	blockSubmitPort := flag.String("block-submit-port", "10548", "The port on which to submit new blocks")
+	enableRelay := flag.Bool("relay-enable", false, "Whether or not to enable relaying on the relay port")
+	relayPort := flag.String("relay-port", "10505", "The port used to relay messages to other nodes")
+	peerFile := flag.String("peer-file", "peers.json", "Path to the file containing peer nodes to establish connections with")
 	showHelp := flag.Bool("help", false, "Shows this Help page")
 
 	flag.Parse()
 
+	// Display help page
 	if *showHelp {
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
-	fmt.Println(*blockCastPort, *txCastPort, *txSubmitPort, *blockSubmitPort)
+	fmt.Println(*enableRelay, *relayPort, *peerFile)
+
 }

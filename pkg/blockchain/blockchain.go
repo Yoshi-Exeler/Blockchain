@@ -11,7 +11,11 @@ import (
 )
 
 type BlockChain struct {
-	Blocks            []*model.Block
+	Blocks     []*model.Block
+	Chainstate Chainstate
+}
+
+type Chainstate struct {
 	Wallets           map[string]*WalletInfo // map[WalletAddress]Currency
 	LastBlock         *model.Block
 	MarketVolume      float64
@@ -26,25 +30,25 @@ type WalletInfo struct {
 func (bc *BlockChain) Print() {
 	fmt.Println("-----------------------")
 	fmt.Printf("|      BlockChain     |\n")
-	fmt.Printf("|Market:%v             |\n", bc.MarketVolume)
-	fmt.Printf("|Tx:%v                 |\n", bc.TransactionVolume)
+	fmt.Printf("|Market:%v             |\n", bc.Chainstate.MarketVolume)
+	fmt.Printf("|Tx:%v                 |\n", bc.Chainstate.TransactionVolume)
 	fmt.Printf("|Blocks:%v             |\n", len(bc.Blocks))
-	fmt.Printf("|LastBlock:%v          |\n", bc.LastBlock.ID)
+	fmt.Printf("|LastBlock:%v          |\n", bc.Chainstate.LastBlock.ID)
 	fmt.Println("-----------------------")
 }
 
 func (bc *BlockChain) PrintWallets() {
-	for key, value := range bc.Wallets {
+	for key, value := range bc.Chainstate.Wallets {
 		fmt.Printf("%v :: %v Coins\n", key, value.Amount)
 	}
 }
 
 func (bc *BlockChain) ProcessAll() {
 	// Reset the Blockchain
-	bc.Wallets = make(map[string]*WalletInfo)
-	bc.LastBlock = nil
-	bc.MarketVolume = 0
-	bc.TransactionVolume = 0
+	bc.Chainstate.Wallets = make(map[string]*WalletInfo)
+	bc.Chainstate.LastBlock = nil
+	bc.Chainstate.MarketVolume = 0
+	bc.Chainstate.TransactionVolume = 0
 	// If transaction blocks actually exist
 	if len(bc.Blocks) > 1 {
 		// Process all the blocks
@@ -63,7 +67,7 @@ func (bc *BlockChain) ProcessAll() {
 
 func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 	// Check that this block is a valid next block
-	if b.Previous != bc.LastBlock.Hash {
+	if b.Previous != bc.Chainstate.LastBlock.Hash {
 		return false
 	}
 	// Verify that the block is generally a valid Block
@@ -76,7 +80,7 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 		decodedSignature, _ := base64.StdEncoding.DecodeString(tx.Signature)
 		hash, _ := b.GetHash()
 		decodedHash, _ := base64.StdEncoding.DecodeString(hash)
-		key, _ := StringToKey(bc.Wallets[tx.Sender].PublicKey)
+		key, _ := StringToKey(bc.Chainstate.Wallets[tx.Sender].PublicKey)
 		if !crypto.VerifySignature(decodedSignature, decodedHash, key) {
 			return false
 		}
@@ -87,21 +91,21 @@ func (bc *BlockChain) ValidateBlock(b *model.Block) bool {
 func (bc *BlockChain) ProcessBlock(b *model.Block) error {
 	// Process the Registrations in this block
 	for _, reg := range b.Registrations {
-		bc.Wallets[reg.Wallet] = &WalletInfo{}
-		bc.Wallets[reg.Wallet].Amount = 0
-		bc.Wallets[reg.Wallet].PublicKey = reg.PublicKey
+		bc.Chainstate.Wallets[reg.Wallet] = &WalletInfo{}
+		bc.Chainstate.Wallets[reg.Wallet].Amount = 0
+		bc.Chainstate.Wallets[reg.Wallet].PublicKey = reg.PublicKey
 	}
 	// Add the Miners fee to the miners wallet
-	bc.Wallets[b.Miner].Amount += model.BlockReward
-	bc.MarketVolume += model.BlockReward
+	bc.Chainstate.Wallets[b.Miner].Amount += model.BlockReward
+	bc.Chainstate.MarketVolume += model.BlockReward
 	// Process the Transactions
 	for _, tx := range b.Transactions {
-		bc.Wallets[tx.Sender].Amount -= tx.Amount
-		bc.Wallets[tx.Recipient].Amount += tx.Amount
-		bc.TransactionVolume++
+		bc.Chainstate.Wallets[tx.Sender].Amount -= tx.Amount
+		bc.Chainstate.Wallets[tx.Recipient].Amount += tx.Amount
+		bc.Chainstate.TransactionVolume++
 	}
 	// Set the Lastblock to the processed block
-	bc.LastBlock = b
+	bc.Chainstate.LastBlock = b
 	// Append the Block
 	bc.Blocks = append(bc.Blocks, b)
 	return nil

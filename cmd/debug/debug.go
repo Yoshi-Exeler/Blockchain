@@ -17,7 +17,7 @@ func main() {
 
 	keyString, _ := blockchain.KeyToString(&wal.KP.PublicKey)
 
-	bc := blockchain.BlockChain{Wallets: make(map[string]*blockchain.WalletInfo), Blocks: []*model.Block{}}
+	bc := blockchain.BlockChain{Chainstate: blockchain.Chainstate{Wallets: make(map[string]*blockchain.WalletInfo)}, Blocks: []*model.Block{}}
 
 	fmt.Printf("\nEmpty Blockchain:%+v\n", bc)
 
@@ -58,7 +58,13 @@ func main() {
 
 	secondBlock.Hash, _ = secondBlock.GetHash()
 
-	fmt.Printf("\nSecond Block:%+v\n", testTransaction)
+	fmt.Println("Hash Difficulty: ", crypto.GetHashDiff([]byte(secondBlock.Hash)))
+
+	fmt.Println("Test Mining until diff = 4")
+
+	secondBlock.Mine(3)
+
+	fmt.Printf("\nSecond Block:%+v\n", secondBlock)
 
 	bc.ProcessBlock(&secondBlock)
 
