@@ -116,8 +116,24 @@ func (r *Relay) processAndRespond(msg protocol.Message, conn net.Conn) {
 		r.handleSync(msg.Content, conn)
 	case protocol.INIT:
 		r.handleInit(msg.Content, conn)
+	case protocol.SYNC_NEXT_BLOCKS:
+		r.handleSyncNextBlocks(msg.Content, conn)
 	default:
 		log.Println("[NODE] Message with invalid type received")
+	}
+}
+
+func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
+	// Unmarshall the content
+	var req protocol.SyncNextBlocksContent
+	err := json.Unmarshal([]byte(content), &req)
+	if err != nil {
+		log.Println("[NODE] failed to unmarshall blocks")
+		return
+	}
+	// Process the blocks in reverse order
+	for i := len(req.Blocks); i > 0; i-- {
+		r.newBlock(*req.Blocks[i], conn)
 	}
 }
 
@@ -126,15 +142,7 @@ func sendMessage(msg protocol.Message, conn net.Conn) {
 	fmt.Fprint(conn, string(bin))
 }
 
-func (r *Relay) handleNewBlock(content string, conn net.Conn) {
-	log.Printf("[%v->%v] New Block", conn.RemoteAddr(), conn.LocalAddr())
-	// Unmarshall the message content
-	var block model.Block
-	err := json.Unmarshal([]byte(content), &block)
-	if err != nil {
-		log.Println("[NODE] Failed to unmarshall new block, ignoring")
-		return
-	}
+func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 	// Validate the Block using our current blockchain
 	if !r.Blockchain.ValidateBlock(block) {
 		log.Println("[NODE] received invalid block, ignoring")
@@ -167,6 +175,18 @@ func (r *Relay) handleNewBlock(content string, conn net.Conn) {
 		// Broadcast the block to our peers
 		r.BroadcastBlock(block)
 	}
+}
+
+func (r *Relay) handleNewBlock(content string, conn net.Conn) {
+	log.Printf("[%v->%v] New Block", conn.RemoteAddr(), conn.LocalAddr())
+	// Unmarshall the message content
+	var block model.Block
+	err := json.Unmarshal([]byte(content), &block)
+	if err != nil {
+		log.Println("[NODE] Failed to unmarshall new block, ignoring")
+		return
+	}
+	r.newBlock(block, conn)
 }
 
 func remove(s []model.Transaction, i int) []model.Transaction {
@@ -203,7 +223,44 @@ func (r *Relay) handleNewTX(content string, conn net.Conn) {
 	}
 }
 
-func (r *Relay) handleSync(content string, conn net.Conn) {}
+func (r *Relay) handleSync(content string, conn net.Conn) {
+	log.Printf("[%v->%v] New Transaction", conn.RemoteAddr(), conn.LocalAddr())
+	// Unmarshall the message content
+	var syncHeader protocol.SyncContent
+	err := json.Unmarshal([]byte(content), &syncHeader)
+	if err != nil {
+		log.Println("[NODE] Failed to unmarshall sync header")
+		return
+	}
+	// Find the blocks that the other node is missing
+	missingBlocks := []*model.Block{}
+	for i := len(r.Blockchain.Blocks) - 1; i > 0; i-- {
+		if r.Blockchain.Blocks[i].Hash == syncHeader.LastBlockHash {
+			break
+		}
+		missingBlocks = append(missingBlocks, r.Blockchain.Blocks[i])
+	}
+	response := protocol.SyncNextBlocksContent{Blocks: missingBlocks}
+	// Marshall the response
+	bin, err := json.Marshal(response)
+	if err != nil {
+		log.Println("[NODE] Failed to marshall sync response content")
+		return
+	}
+	// Create the Message
+	msg := protocol.Message{
+		Type:    protocol.SYNC_NEXT_BLOCKS,
+		Content: string(bin),
+	}
+	// Marshall the message
+	msgBin, err := json.Marshal(msg)
+	if err != nil {
+		log.Println("[NODE] Failed to marshall message")
+		return
+	}
+	// Respond with the message
+	fmt.Fprint(conn, string(msgBin))
+}
 
 func (r *Relay) handleInit(content string, conn net.Conn) {}
 
