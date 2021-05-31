@@ -22,6 +22,7 @@ type Chainstate struct {
 }
 
 type WalletInfo struct {
+	TXC       uint64 // Transaction Counter to avoid transaction duplication attacks
 	Amount    float64
 	PublicKey string
 }
@@ -98,6 +99,14 @@ func (bc *BlockChain) ValidateBlock(b model.Block) bool {
 		if !tx.Verify(key) {
 			return false
 		}
+		// Check that the transaction has the expected id
+		if tx.TXID != bc.Chainstate.Wallets[tx.Sender].TXC+1 {
+			return false
+		}
+		// Check if enough balance exists to make the transaction
+		if tx.Amount > bc.Chainstate.Wallets[tx.Sender].Amount {
+			return false
+		}
 	}
 	return true
 }
@@ -116,6 +125,7 @@ func (bc *BlockChain) ProcessBlock(b model.Block) error {
 	for _, tx := range b.Transactions {
 		bc.Chainstate.Wallets[tx.Sender].Amount -= tx.Amount
 		bc.Chainstate.Wallets[tx.Recipient].Amount += tx.Amount
+		bc.Chainstate.Wallets[tx.Sender].TXC++
 		bc.Chainstate.TransactionVolume++
 	}
 	// Set the Lastblock to the processed block

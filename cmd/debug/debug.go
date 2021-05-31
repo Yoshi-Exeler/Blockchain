@@ -28,7 +28,7 @@ func main() {
 	fmt.Printf("\nInsert first Block into Blockchain:%+v\n", bc)
 
 	testTransaction := model.Transaction{
-		GUID:      "GUID",
+		TXID:      1,
 		Sender:    wal.Address,
 		Recipient: "testwallet123",
 		Amount:    0.1,

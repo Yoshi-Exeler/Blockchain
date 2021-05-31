@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Dial our Peers
-	relay.ConsumePeers(peers)
+	go relay.ConsumePeers(peers)
 
 	// Start our miner if it is enabled
 	if *enableMiner {

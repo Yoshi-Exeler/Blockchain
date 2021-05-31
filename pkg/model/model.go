@@ -89,7 +89,7 @@ type Registration struct {
 }
 
 type Transaction struct {
-	GUID      string  // Randomly generated id for the transaction
+	TXID      uint64  // Autoincrement id for transactions
 	Sender    string  // Wallet address of the sender
 	Recipient string  // Wallet address of the recipient
 	Amount    float64 // Amount of coins sent
@@ -118,6 +118,6 @@ func (tx *Transaction) Verify(publicKey *rsa.PublicKey) bool {
 }
 
 func (tx *Transaction) GetHash() (string, error) {
-	hash := fmt.Sprintf("%v%v%v%v%v", tx.GUID, tx.Sender, tx.Recipient, tx.Amount, tx.Comment)
+	hash := fmt.Sprintf("%v%v%v%v%v", tx.TXID, tx.Sender, tx.Recipient, tx.Amount, tx.Comment)
 	return crypto.HashB64(hash)
 }
