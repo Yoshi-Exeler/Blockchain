@@ -8,18 +8,21 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 )
 
 type Relay struct {
-	Mine         bool
-	RestartMiner *bool
-	Local        bool
-	Connections  []net.Conn
-	Blockchain   blockchain.BlockChain
-	FloatingTx   []model.Transaction
-	FloatingRx   []model.Registration
-	Peers        []string
-	Wallet       blockchain.Wallet
+	Mine          bool
+	RestartMiner  *bool
+	Local         bool
+	Connections   []net.Conn
+	Blockchain    blockchain.BlockChain
+	FloatingTx    []model.Transaction
+	FloatingRx    []model.Registration
+	Peers         []string
+	Wallet        blockchain.Wallet
+	PeerSyncMutex *sync.Mutex
+	InSyncTx      bool
 }
 
 func (r *Relay) MineBlocks(stop *bool) {
@@ -63,6 +66,28 @@ func (r *Relay) ConsumePeers(peers []string) {
 		// handle the connection async
 		go r.handleConnection(conn)
 	}
+}
+
+func (r *Relay) TrySyncOrNop(conn net.Conn) {
+	// Check if we are currently in a sync transaction
+	if r.InSyncTx {
+		// if a sync transaction is currently active, just nop
+		return
+	}
+	// If we are not in a sync transaction, try to acquire the sync lock
+	r.PeerSyncMutex.Lock()
+	// Now we can begin syncing with a peer, we will use the peer specified
+	// Build a message content string
+	cont := protocol.SyncContent{LastBlockHash: r.Blockchain.Chainstate.LastBlock.Hash}
+	// Marshall the content to json
+	bin, err := json.Marshal(cont)
+	if err != nil {
+		fmt.Println("[RELAY] failed to build sync request")
+	}
+	// Build a message
+	msg := protocol.Message{Type: protocol.SYNC, Content: string(bin)}
+	// Send the sync request to the node
+	sendMessage(msg, conn)
 }
 
 func (r *Relay) Listen(addr string) {
