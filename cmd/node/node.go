@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 )
 
 const MaxBlocksPerRequest = 100
@@ -67,11 +68,12 @@ func main() {
 
 	// Create our Relay
 	relay := relay.Relay{
-		Local:        *enableRelay,
-		Blockchain:   bc,
-		Peers:        peers,
-		Wallet:       *wallet,
-		RestartMiner: &restart,
+		Local:         *enableRelay,
+		Blockchain:    bc,
+		Peers:         peers,
+		Wallet:        *wallet,
+		RestartMiner:  &restart,
+		PeerSyncMutex: &sync.Mutex{},
 	}
 
 	// Begin Listening for consumers if relaying is active

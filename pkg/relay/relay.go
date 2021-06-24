@@ -2,6 +2,7 @@ package relay
 
 import (
 	"coins/pkg/blockchain"
+	"coins/pkg/gorx"
 	"coins/pkg/model"
 	"coins/pkg/protocol"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type Relay struct {
@@ -22,6 +24,7 @@ type Relay struct {
 	Peers         []string
 	Wallet        blockchain.Wallet
 	PeerSyncMutex *sync.Mutex
+	SyncPromise   *gorx.Promise
 	InSyncTx      bool
 }
 
@@ -50,6 +53,12 @@ func (r *Relay) MineBlocks(stop *bool) {
 				r.Blockchain.ProcessBlock(newBlock)
 			}
 		}()
+		for {
+			time.Sleep(time.Millisecond * 250)
+			if *stop {
+				break
+			}
+		}
 	}
 }
 
@@ -86,6 +95,14 @@ func (r *Relay) TrySyncOrNop(conn net.Conn) {
 	}
 	// Build a message
 	msg := protocol.Message{Type: protocol.SYNC, Content: string(bin)}
+	// Setup our sync promise
+	r.SyncPromise = gorx.NewPromiseWithTimeout(time.Minute).Then(func(v interface{}) {
+		r.SyncPromise = nil
+		r.PeerSyncMutex.Unlock()
+		r.InSyncTx = false
+	})
+	// Log
+	fmt.Println("[RELAY] syncing with peer ", conn.RemoteAddr())
 	// Send the sync request to the node
 	sendMessage(msg, conn)
 }
@@ -125,7 +142,7 @@ func (r *Relay) handleConnection(conn net.Conn) {
 			continue
 		}
 		// Process the message and respond to it
-		r.processAndRespond(msg, conn)
+		go r.processAndRespond(msg, conn)
 	}
 
 }
@@ -156,10 +173,14 @@ func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
 		log.Println("[NODE] failed to unmarshall blocks")
 		return
 	}
+	// Write to log
+	fmt.Printf("[NODE] Received %v blocks from peer %v\n", len(req.Blocks), conn.RemoteAddr())
 	// Process the blocks in reverse order
-	for i := len(req.Blocks); i > 0; i-- {
+	for i := len(req.Blocks) - 1; i > 0; i-- {
 		r.newBlock(*req.Blocks[i], conn)
 	}
+	// Complete our sync promise
+	r.SyncPromise.Resolve(nil)
 }
 
 func sendMessage(msg protocol.Message, conn net.Conn) {
@@ -170,12 +191,13 @@ func sendMessage(msg protocol.Message, conn net.Conn) {
 func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 	// Validate the Block using our current blockchain
 	if !r.Blockchain.ValidateBlock(block) {
-		log.Println("[NODE] received invalid block, ignoring")
+		log.Println("[NODE] received invalid block, trying to sync with node")
+		go r.TrySyncOrNop(conn)
 		return
 	}
 	// Process the Block into our blockchain
 	log.Println("[NODE] received new valid block, processing")
-	r.Blockchain.ProcessBlock(block)
+	go r.Blockchain.ProcessBlock(block)
 	// Remove its transactions from the floating ones
 	actionTaken := false
 	for {
@@ -198,7 +220,7 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 	// if we are an open relay, broadcast the block
 	if !r.Local {
 		// Broadcast the block to our peers
-		r.BroadcastBlock(block)
+		go r.BroadcastBlock(block)
 	}
 }
 
@@ -244,7 +266,7 @@ func (r *Relay) handleNewTX(content string, conn net.Conn) {
 	// if we are an open relay, broadcast the transaction
 	if !r.Local {
 		// Broadcast the block to our peers
-		r.BroadcastTx(tx)
+		go r.BroadcastTx(tx)
 	}
 }
 
