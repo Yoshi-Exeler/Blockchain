@@ -11,8 +11,9 @@ import (
 )
 
 const BlockReward = float64(1)
-const BlockDiff = byte(3)
-const EmptyBlockDiff = byte(3)
+const BlockDiff = byte(2)
+const EmptyBlockDiff = byte(2)
+const THREADS = 2
 
 type Block struct {
 	ID            uint64         // Autoincrement id of the block
@@ -23,8 +24,6 @@ type Block struct {
 	Transactions  []Transaction  // The Signed Transactions included in this block
 	Registrations []Registration // The Registrations that happened in this block
 }
-
-const THREADS = 2
 
 func (b *Block) Mine(stop *bool) {
 	var difficulty byte

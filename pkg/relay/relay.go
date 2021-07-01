@@ -176,7 +176,8 @@ func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
 	// Write to log
 	fmt.Printf("[NODE] Received %v blocks from peer %v\n", len(req.Blocks), conn.RemoteAddr())
 	// Process the blocks in reverse order
-	for i := len(req.Blocks) - 1; i > 0; i-- {
+	for i := len(req.Blocks) - 1; i >= 0; i-- {
+		fmt.Printf("BEGIN_PROCESS_BLOCK %v\n", req.Blocks[i].ID)
 		r.newBlock(*req.Blocks[i], conn)
 	}
 	// Complete our sync promise
@@ -189,6 +190,7 @@ func sendMessage(msg protocol.Message, conn net.Conn) {
 }
 
 func (r *Relay) newBlock(block model.Block, conn net.Conn) {
+	fmt.Printf("[SYNC] id=%v hash=%v prev=%v", block.ID, block.Hash, block.Previous)
 	// Validate the Block using our current blockchain
 	if !r.Blockchain.ValidateBlock(block) {
 		log.Println("[NODE] received invalid block, trying to sync with node")
@@ -222,6 +224,7 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 		// Broadcast the block to our peers
 		go r.BroadcastBlock(block)
 	}
+	fmt.Printf("[SYNC] Complete, lastHash=%v lastID=%v", r.Blockchain.Chainstate.LastBlock.Hash, r.Blockchain.Chainstate.LastBlock.ID)
 }
 
 func (r *Relay) handleNewBlock(content string, conn net.Conn) {
@@ -271,7 +274,7 @@ func (r *Relay) handleNewTX(content string, conn net.Conn) {
 }
 
 func (r *Relay) handleSync(content string, conn net.Conn) {
-	log.Printf("[%v->%v] New Transaction", conn.RemoteAddr(), conn.LocalAddr())
+	log.Printf("[%v->%v] Sync request", conn.RemoteAddr(), conn.LocalAddr())
 	// Unmarshall the message content
 	var syncHeader protocol.SyncContent
 	err := json.Unmarshal([]byte(content), &syncHeader)
@@ -281,7 +284,7 @@ func (r *Relay) handleSync(content string, conn net.Conn) {
 	}
 	// Find the blocks that the other node is missing
 	missingBlocks := []*model.Block{}
-	for i := len(r.Blockchain.Blocks) - 1; i > 0; i-- {
+	for i := len(r.Blockchain.Blocks) - 1; i >= 0; i-- {
 		if r.Blockchain.Blocks[i].Hash == syncHeader.LastBlockHash {
 			break
 		}
