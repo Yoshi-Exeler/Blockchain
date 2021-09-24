@@ -5,7 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 )
@@ -39,7 +39,7 @@ func (b *Block) Mine(stop *bool) {
 	}
 	result := <-signalChannel
 	b.Nonce = result
-	b.Hash, _ = b.GetHash()
+	b.Hash = b.GetHash()
 	*stop = true
 }
 
@@ -57,29 +57,13 @@ func mine(difficulty byte, seed uint64, block Block, sigChan chan uint64, stop *
 }
 
 func (b *Block) hashFast() []byte {
-	hash := []byte(fmt.Sprintf("%v%v%v%v", b.ID, b.Previous, b.Miner, b.Nonce))
-	txBin, _ := json.Marshal(b.Transactions)
-	regBin, _ := json.Marshal(b.Registrations)
-	hash = append(hash, txBin...)
-	hash = append(hash, regBin...)
-	hasher := sha256.New()
-	hasher.Write(hash)
-	return hasher.Sum(nil)
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%v", b)))
+	return h.Sum(nil)
 }
 
-func (b *Block) GetHash() (string, error) {
-	hash := fmt.Sprintf("%v%v%v%v", b.ID, b.Previous, b.Miner, b.Nonce)
-	txBin, err := json.Marshal(b.Transactions)
-	if err != nil {
-		return "", err
-	}
-	regBin, err := json.Marshal(b.Registrations)
-	if err != nil {
-		return "", err
-	}
-	hash += string(txBin)
-	hash += string(regBin)
-	return crypto.HashB64(hash)
+func (b *Block) GetHash() string {
+	return hex.EncodeToString(b.hashFast())
 }
 
 type Registration struct {

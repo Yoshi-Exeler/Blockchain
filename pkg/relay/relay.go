@@ -115,12 +115,13 @@ func (r *Relay) ConsumePeers(peers []string) {
 				conn, err := net.Dial("tcp", alloc)
 				if err != nil {
 					log.Printf("Could not initialize connection with error %v\n", err)
+					time.Sleep(time.Minute)
 					continue
 				}
 				log.Printf("[NODE] Connected to peer %v\n", alloc)
 				// handle the connection async
 				r.handleConnection(conn)
-				time.Sleep(time.Second * 1)
+				return
 			}
 		}()
 	}

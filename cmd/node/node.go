@@ -10,11 +10,15 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
+	"time"
 )
 
 const MaxBlocksPerRequest = 100
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 
 func main() {
 	enableRelay := flag.Bool("relay-enable", false, "Whether or not to enable relaying on the relay port")
@@ -24,6 +28,15 @@ func main() {
 	showHelp := flag.Bool("help", false, "Shows this Help page")
 
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	// Display help page
 	if *showHelp {
@@ -101,6 +114,9 @@ func main() {
 
 	// Make sure we regularly commit the blockchain to disk
 	go relay.CommitBlockchain()
+
+	time.Sleep(time.Minute)
+	return
 
 	// Read stdin and process commands
 	for {

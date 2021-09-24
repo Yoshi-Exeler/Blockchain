@@ -21,7 +21,7 @@ func main() {
 	fmt.Printf("\nEmpty Blockchain:%+v\n", bc)
 
 	firstBlock := model.Block{}
-	firstBlock.Hash, _ = firstBlock.GetHash()
+	firstBlock.Hash = firstBlock.GetHash()
 
 	bc.Blocks = append(bc.Blocks, &firstBlock)
 
@@ -53,7 +53,7 @@ func main() {
 		Registrations: []model.Registration{{Wallet: "testwallet123", PublicKey: "testkey"}, {Wallet: wal.Address, PublicKey: keyString}},
 	}
 
-	secondBlock.Hash, _ = secondBlock.GetHash()
+	secondBlock.Hash = secondBlock.GetHash()
 
 	fmt.Println("Mining the Second Block")
 
