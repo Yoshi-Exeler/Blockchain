@@ -136,7 +136,7 @@ func (r *Relay) TrySyncOrNop(conn net.Conn) {
 	r.PeerSyncMutex.Lock()
 	// Now we can begin syncing with a peer, we will use the peer specified
 	// Build a message content string
-	cont := protocol.SyncContent{LastBlockHash: r.Blockchain.Chainstate.LastBlock.Hash}
+	cont := protocol.SyncContent{LastBlockHash: r.Blockchain.Chainstate.LastBlock.Hash, Head: r.Blockchain.Chainstate.LastBlock.ID}
 	// Marshall the content to json
 	bin, err := json.Marshal(cont)
 	if err != nil {
@@ -379,6 +379,11 @@ func (r *Relay) handleSync(content string, conn net.Conn) {
 		log.Println("[NODE] Failed to unmarshall sync header")
 		return
 	}
+	// dont sync if remote has more blocks than we do
+	if syncHeader.Head > r.Blockchain.Chainstate.LastBlock.ID {
+		fmt.Printf("[NODE] reject sync request from remote relay with head %v while local head is %v", syncHeader.Head, r.Blockchain.Chainstate.LastBlock.ID)
+		return
+	}
 	// Find the blocks that the other node is missing
 	missingBlocks := []*model.Block{}
 	for i := len(r.Blockchain.Blocks) - 1; i >= 0; i-- {
@@ -387,7 +392,7 @@ func (r *Relay) handleSync(content string, conn net.Conn) {
 		}
 		missingBlocks = append(missingBlocks, r.Blockchain.Blocks[i])
 	}
-	response := protocol.SyncNextBlocksContent{Blocks: missingBlocks}
+	response := protocol.SyncNextBlocksContent{Blocks: missingBlocks, Head: r.Blockchain.Chainstate.LastBlock.ID}
 	// Marshall the response
 	bin, err := json.Marshal(response)
 	if err != nil {
