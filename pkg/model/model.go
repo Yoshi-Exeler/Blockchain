@@ -12,8 +12,8 @@ import (
 
 const BlockReward = float64(1)
 const BlockDiff = byte(1)
-const EmptyBlockDiff = byte(1)
-const THREADS = 4
+const EmptyBlockDiff = byte(2)
+const MinerThreads = 4
 
 type Block struct {
 	ID            uint64         // Autoincrement id of the block
@@ -33,7 +33,7 @@ func (b *Block) Mine(stop *bool) {
 		difficulty = EmptyBlockDiff
 	}
 	signalChannel := make(chan uint64)
-	for i := 0; i < THREADS; i++ {
+	for i := 0; i < MinerThreads; i++ {
 		seed := uint64(rand.Uint32())<<32 + uint64(rand.Uint32())
 		go mine(difficulty, seed, *b, signalChannel, stop)
 	}

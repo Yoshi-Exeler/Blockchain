@@ -241,6 +241,11 @@ func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
 		log.Println("[NODE] failed to unmarshall blocks")
 		return
 	}
+	// check if the remote state has more work than ours
+	if req.Head <= r.Blockchain.Chainstate.LastBlock.ID {
+		fmt.Printf("[NODE] Sync from peer %v rejected. remote head %v <= local head %v", conn.RemoteAddr(), req.Head, r.Blockchain.Chainstate.LastBlock.ID)
+		return
+	}
 	// Write to log
 	fmt.Printf("[NODE] Received %v blocks from peer %v\n", len(req.Blocks), conn.RemoteAddr())
 	// Process the blocks in reverse order

@@ -25,10 +25,12 @@ type Message struct {
 }
 
 type SyncContent struct {
-	LastBlockHash string
+	Head          uint64 // the head block of the remote chainstate
+	LastBlockHash string // the hash of the last block
 }
 
 type SyncNextBlocksContent struct {
+	Head   uint64 // the head of the chainstate of the local relay
 	Blocks []*model.Block
 }
 
