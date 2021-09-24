@@ -50,8 +50,7 @@ func (r *Relay) MineBlocks(stop *bool) {
 			if res == blockchain.B_ACCEPT {
 				log.Printf("[MINER] new block mined id=%v hash=%v\n", newBlock.ID, newBlock.Hash)
 				// if we found a block, process and broadcast it
-				r.BroadcastBlock(newBlock)
-				r.Blockchain.ProcessBlock(newBlock)
+				r.newBlock(newBlock)
 			}
 		}()
 		for {
@@ -83,7 +82,7 @@ func (r *Relay) CommitBlockchain() {
 
 }
 
-func (r *Relay) RgisterOrNop() {
+func (r *Relay) RegisterOrNop() {
 	// First we need to check if we are registered on the blockchain
 	if r.Blockchain.Chainstate.Wallets[r.Wallet.Address] != nil {
 		// If we are registered just nop
@@ -247,7 +246,7 @@ func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
 	// Process the blocks in reverse order
 	for i := len(req.Blocks) - 1; i >= 0; i-- {
 		fmt.Printf("BEGIN_PROCESS_BLOCK %v\n", req.Blocks[i].ID)
-		r.newBlock(*req.Blocks[i], conn)
+		r.newBlockFromPeer(*req.Blocks[i], conn)
 	}
 	// Complete our sync promise
 	r.SyncPromise.Resolve(nil)
@@ -258,14 +257,7 @@ func sendMessage(msg protocol.Message, conn net.Conn) {
 	fmt.Fprint(conn, string(bin))
 }
 
-func (r *Relay) newBlock(block model.Block, conn net.Conn) {
-	// Validate the Block using our current blockchain
-	res := r.Blockchain.ValidateBlock(block)
-	if res != blockchain.B_ACCEPT {
-		log.Printf("[NODE] block with id=%v rejected with reason=%v\n", block.ID, res)
-		go r.TrySyncOrNop(conn)
-		return
-	}
+func (r *Relay) newBlock(block model.Block) {
 	// Process the Block into our blockchain
 	log.Printf("[NODE] new block id=%v accepted\n", block.ID)
 	go r.Blockchain.ProcessBlock(block)
@@ -282,6 +274,12 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 				break
 			}
 		}
+		if !actionTaken {
+			break
+		}
+	}
+	actionTaken = false
+	for {
 		for i := 0; i < len(block.Registrations); i++ {
 			for j := 0; j < len(r.FloatingRx); j++ {
 				r.FloatingRx = removeRX(r.FloatingRx, j)
@@ -305,6 +303,17 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 	}
 }
 
+func (r *Relay) newBlockFromPeer(block model.Block, conn net.Conn) {
+	// Validate the Block using our current blockchain
+	res := r.Blockchain.ValidateBlock(block)
+	if res != blockchain.B_ACCEPT {
+		log.Printf("[NODE] block with id=%v rejected with reason=%v\n", block.ID, res)
+		go r.TrySyncOrNop(conn)
+		return
+	}
+	r.newBlock(block)
+}
+
 func (r *Relay) handleNewBlock(content string, conn net.Conn) {
 	log.Printf("[%v->%v] New Block", conn.RemoteAddr(), conn.LocalAddr())
 	// Unmarshall the message content
@@ -314,7 +323,7 @@ func (r *Relay) handleNewBlock(content string, conn net.Conn) {
 		log.Println("[NODE] Failed to unmarshall new block, ignoring")
 		return
 	}
-	r.newBlock(block, conn)
+	r.newBlockFromPeer(block, conn)
 }
 
 func remove(s []model.Transaction, i int) []model.Transaction {

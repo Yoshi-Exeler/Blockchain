@@ -79,7 +79,6 @@ const (
 func (bc *BlockChain) ValidateBlock(b model.Block) BLOCK_VALIDATION_RESULT {
 	// Check that this block is a valid next block
 	if b.Previous != bc.Chainstate.LastBlock.Hash {
-		fmt.Printf("HEAD@%v BLOCK@%v", bc.Chainstate.LastBlock.ID, b.ID)
 		return B_REJECT_HASH_INTEG
 	}
 	// Check that the id was incremented correctly

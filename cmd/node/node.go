@@ -84,7 +84,7 @@ func main() {
 	}
 
 	// Make sure we register with the blockchain
-	relay.RgisterOrNop()
+	relay.RegisterOrNop()
 
 	// Begin Listening for consumers if relaying is active
 	if *enableRelay {
@@ -93,20 +93,6 @@ func main() {
 
 	// Dial our Peers
 	go relay.ConsumePeers(peers)
-
-	// If we are not registered, we must register
-	if relay.Blockchain.Chainstate.Wallets[relay.Wallet.Address] == nil {
-		kstr, err := blockchain.KeyToString(&relay.Wallet.KP.PublicKey)
-		if err != nil {
-			log.Fatal("unable to convert public key to string")
-		}
-		rx := model.Registration{
-			Wallet:    relay.Wallet.Address,
-			PublicKey: kstr,
-		}
-		relay.FloatingRx = append(relay.FloatingRx, rx)
-		relay.BroadcastRx(rx)
-	}
 
 	// Start our miner if it is enabled
 	if *enableMiner {
