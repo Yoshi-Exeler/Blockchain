@@ -11,9 +11,9 @@ import (
 )
 
 const BlockReward = float64(1)
-const BlockDiff = byte(2)
-const EmptyBlockDiff = byte(2)
-const THREADS = 2
+const BlockDiff = byte(1)
+const EmptyBlockDiff = byte(1)
+const THREADS = 4
 
 type Block struct {
 	ID            uint64         // Autoincrement id of the block

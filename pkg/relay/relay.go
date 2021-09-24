@@ -7,6 +7,7 @@ import (
 	"coins/pkg/protocol"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"sync"
@@ -45,16 +46,16 @@ func (r *Relay) MineBlocks(stop *bool) {
 		go func() {
 			newBlock.Mine(stop)
 			// if the miner stops, check if its result is a valid block
-			log.Printf("[MINER] Block found, validating %v  stop:%v wallets:%v\n", newBlock, *stop, r.Blockchain.Chainstate.Wallets)
-			if r.Blockchain.ValidateBlock(newBlock) {
-				log.Println("[MINER] Block found, broadcasting now")
+			res := r.Blockchain.ValidateBlock(newBlock)
+			if res == blockchain.B_ACCEPT {
+				log.Printf("[MINER] new block mined id=%v hash=%v\n", newBlock.ID, newBlock.Hash)
 				// if we found a block, process and broadcast it
 				r.BroadcastBlock(newBlock)
 				r.Blockchain.ProcessBlock(newBlock)
 			}
 		}()
 		for {
-			time.Sleep(time.Millisecond * 250)
+			time.Sleep(time.Millisecond * 100)
 			if *stop {
 				break
 			}
@@ -62,18 +63,67 @@ func (r *Relay) MineBlocks(stop *bool) {
 	}
 }
 
+func (r *Relay) CommitBlockchain() {
+	for {
+		// copy the blockchain
+		state := r.Blockchain
+		// marhsall the copy
+		bin, err := json.Marshal(state)
+		if err != nil {
+			fmt.Printf("[NODE] failed to marshall blockchain with error %v\n", err)
+		}
+		// Write the content to file
+		err = ioutil.WriteFile("blockchain.json", bin, 0644)
+		if err != nil {
+			fmt.Printf("[NODE] failed to commit blockchain to disk with error %v\n", err)
+		}
+		fmt.Println("[NODE] blockchain committed to disk successfully")
+		time.Sleep(time.Second * 10)
+	}
+
+}
+
+func (r *Relay) RgisterOrNop() {
+	// First we need to check if we are registered on the blockchain
+	if r.Blockchain.Chainstate.Wallets[r.Wallet.Address] != nil {
+		// If we are registered just nop
+		return
+	}
+	// Convert our private key
+	keyStr, err := blockchain.KeyToString(&r.Wallet.KP.PublicKey)
+	if err != nil {
+		fmt.Println("[NODE] blockchain registration request building failed")
+		return
+	}
+	// Build a registration
+	rx := model.Registration{
+		Wallet:    r.Wallet.Address,
+		PublicKey: keyStr,
+	}
+	// Broadcast onto the network
+	go r.BroadcastRx(rx)
+	// Add it to our own floating rx
+	r.FloatingRx = append(r.FloatingRx, rx)
+}
+
 func (r *Relay) ConsumePeers(peers []string) {
 	// Iterate over the specified peers
 	for _, peer := range peers {
-		// Connect to the peer
-		conn, err := net.Dial("tcp", peer)
-		if err != nil {
-			log.Printf("Could not initialize connection with error %v\n", err)
-			continue
-		}
-		log.Printf("[NODE] Connected to peer %v\n", peer)
-		// handle the connection async
-		go r.handleConnection(conn)
+		alloc := peer
+		go func() {
+			for {
+				// Connect to the peer
+				conn, err := net.Dial("tcp", alloc)
+				if err != nil {
+					log.Printf("Could not initialize connection with error %v\n", err)
+					continue
+				}
+				log.Printf("[NODE] Connected to peer %v\n", alloc)
+				// handle the connection async
+				r.handleConnection(conn)
+				time.Sleep(time.Second * 1)
+			}
+		}()
 	}
 }
 
@@ -138,6 +188,9 @@ func (r *Relay) handleConnection(conn net.Conn) {
 		var msg protocol.Message
 		err := decoder.Decode(&msg)
 		if err != nil {
+			if &msg == nil {
+				return
+			}
 			log.Println("[NODE] Invalid Message Received")
 			continue
 		}
@@ -160,9 +213,25 @@ func (r *Relay) processAndRespond(msg protocol.Message, conn net.Conn) {
 		r.handleInit(msg.Content, conn)
 	case protocol.SYNC_NEXT_BLOCKS:
 		r.handleSyncNextBlocks(msg.Content, conn)
+	case protocol.NEW_RX:
+		r.handleNewRx(msg.Content, conn)
 	default:
 		log.Println("[NODE] Message with invalid type received")
 	}
+}
+
+func (r *Relay) handleNewRx(content string, conn net.Conn) {
+	// Unmarshall the content
+	var req model.Registration
+	err := json.Unmarshal([]byte(content), &req)
+	if err != nil {
+		log.Println("[NODE] failed to unmarshall blocks")
+		return
+	}
+	// Log that we received a new rx
+	fmt.Printf("[NODE] Received new Registration for %v\n", req.Wallet)
+	// Add the registration to the pool of floating rx
+	r.FloatingRx = append(r.FloatingRx, req)
 }
 
 func (r *Relay) handleSyncNextBlocks(content string, conn net.Conn) {
@@ -190,15 +259,15 @@ func sendMessage(msg protocol.Message, conn net.Conn) {
 }
 
 func (r *Relay) newBlock(block model.Block, conn net.Conn) {
-	fmt.Printf("[SYNC] id=%v hash=%v prev=%v", block.ID, block.Hash, block.Previous)
 	// Validate the Block using our current blockchain
-	if !r.Blockchain.ValidateBlock(block) {
-		log.Println("[NODE] received invalid block, trying to sync with node")
+	res := r.Blockchain.ValidateBlock(block)
+	if res != blockchain.B_ACCEPT {
+		log.Printf("[NODE] block with id=%v rejected with reason=%v\n", block.ID, res)
 		go r.TrySyncOrNop(conn)
 		return
 	}
 	// Process the Block into our blockchain
-	log.Println("[NODE] received new valid block, processing")
+	log.Printf("[NODE] new block id=%v accepted\n", block.ID)
 	go r.Blockchain.ProcessBlock(block)
 	// Remove its transactions from the floating ones
 	actionTaken := false
@@ -206,6 +275,16 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 		for i := 0; i < len(block.Transactions); i++ {
 			for j := 0; j < len(r.FloatingTx); j++ {
 				r.FloatingTx = remove(r.FloatingTx, j)
+				actionTaken = true
+				break
+			}
+			if actionTaken {
+				break
+			}
+		}
+		for i := 0; i < len(block.Registrations); i++ {
+			for j := 0; j < len(r.FloatingRx); j++ {
+				r.FloatingRx = removeRX(r.FloatingRx, j)
 				actionTaken = true
 				break
 			}
@@ -224,7 +303,6 @@ func (r *Relay) newBlock(block model.Block, conn net.Conn) {
 		// Broadcast the block to our peers
 		go r.BroadcastBlock(block)
 	}
-	fmt.Printf("[SYNC] Complete, lastHash=%v lastID=%v", r.Blockchain.Chainstate.LastBlock.Hash, r.Blockchain.Chainstate.LastBlock.ID)
 }
 
 func (r *Relay) handleNewBlock(content string, conn net.Conn) {
@@ -240,6 +318,11 @@ func (r *Relay) handleNewBlock(content string, conn net.Conn) {
 }
 
 func remove(s []model.Transaction, i int) []model.Transaction {
+	s[len(s)-1], s[i] = s[i], s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+func removeRX(s []model.Registration, i int) []model.Registration {
 	s[len(s)-1], s[i] = s[i], s[len(s)-1]
 	return s[:len(s)-1]
 }
@@ -354,6 +437,28 @@ func (r *Relay) BroadcastTx(tx model.Transaction) {
 	// Send the marshalled message to each connected consumer
 	for _, conn := range r.Connections {
 		log.Printf("[%v->%v] TX:%v", conn.LocalAddr(), conn.RemoteAddr(), tx.Hash)
+		fmt.Fprint(conn, string(msgBuffer))
+	}
+}
+
+func (r *Relay) BroadcastRx(rx model.Registration) {
+	// Marhsall the Registration
+	bin, err := json.Marshal(rx)
+	if err != nil {
+		log.Println("[NODE] Could not broadcast registration because serialization of the registration failed")
+		return
+	}
+	// Create our broadcast message
+	msg := protocol.Message{Type: protocol.NEW_RX, Content: string(bin)}
+	// Marshall the message
+	msgBuffer, err := json.Marshal(msg)
+	if err != nil {
+		log.Println("[NODE] Could not broadcast registration because serialization of the message failed")
+		return
+	}
+	// Send the marshalled message to each connected consumer
+	for _, conn := range r.Connections {
+		log.Printf("[%v->%v] RX:%v", conn.LocalAddr(), conn.RemoteAddr(), rx.Wallet)
 		fmt.Fprint(conn, string(msgBuffer))
 	}
 }

@@ -16,6 +16,7 @@ const (
 	SYNC_NEXT_BLOCKS MessageType = 4
 	INIT             MessageType = 5
 	INIT_BLOCKS      MessageType = 6
+	NEW_RX           MessageType = 7
 )
 
 type Message struct {

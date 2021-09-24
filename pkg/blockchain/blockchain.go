@@ -54,8 +54,9 @@ func (bc *BlockChain) ProcessAll() {
 		for _, block := range bc.Blocks[1:] {
 			alloc := *block
 			// Validate the Current Block
-			if !bc.ValidateBlock(alloc) {
-				log.Printf("[BlockChain] Block %v is invalid and will be skipped\n", alloc.ID)
+			res := bc.ValidateBlock(alloc)
+			if res != B_ACCEPT {
+				log.Printf("[BlockChain] Block %v is invalid and will be skipped, reason=%v\n", alloc.ID, res)
 				continue
 			}
 			// Process the current block
@@ -64,51 +65,63 @@ func (bc *BlockChain) ProcessAll() {
 	}
 }
 
-func (bc *BlockChain) ValidateBlock(b model.Block) bool {
+type BLOCK_VALIDATION_RESULT string
+
+const (
+	B_ACCEPT               = BLOCK_VALIDATION_RESULT("BLOCK_ACCEPT")
+	B_REJECT_HASH_INTEG    = BLOCK_VALIDATION_RESULT("BLOCK_REJECT_NO_HASH_SEQUENCE_INTEGRITY")
+	B_REJECT_ID_INTEG      = BLOCK_VALIDATION_RESULT("BLOCK_REJECT_NO_ID_SEQUENCE_INTEGRITY")
+	B_REJECT_WRONG_DIFF    = BLOCK_VALIDATION_RESULT("BLOCK_REJECT_WRON_HASH_DIFF")
+	B_REJECT_BLOCK_INVALID = BLOCK_VALIDATION_RESULT("BLOCK_REJECT_BLOCK_INVALID")
+	B_REJECT_TX_INVALID    = BLOCK_VALIDATION_RESULT("BLOCK_REJECT_TRANSACTION_INVALID")
+)
+
+func (bc *BlockChain) ValidateBlock(b model.Block) BLOCK_VALIDATION_RESULT {
 	// Check that this block is a valid next block
 	if b.Previous != bc.Chainstate.LastBlock.Hash {
-		return false
+		fmt.Printf("HEAD@%v BLOCK@%v", bc.Chainstate.LastBlock.ID, b.ID)
+		return B_REJECT_HASH_INTEG
 	}
 	// Check that the id was incremented correctly
 	if bc.Chainstate.LastBlock.ID+1 != b.ID {
-		return false
+		return B_REJECT_ID_INTEG
 	}
 	// Check that the block has the correct difficulty
 	if len(b.Transactions) > 0 || len(b.Registrations) > 0 {
 		if crypto.GetHashDiff(crypto.ToBytes(b.Hash)) != model.BlockDiff {
-			return false
+			return B_REJECT_WRONG_DIFF
 		}
 	} else {
 		if crypto.GetHashDiff(crypto.ToBytes(b.Hash)) != model.EmptyBlockDiff {
-			return false
+			return B_REJECT_WRONG_DIFF
 		}
 	}
 	// Verify that the block is generally a valid Block
-	if VerifyBlock(b) {
+	if !VerifyBlock(b) {
 		// if the block is invalid, we just skip it
-		return false
+		return B_REJECT_BLOCK_INVALID
 	}
 	// Check all transaction signatures
 	for _, tx := range b.Transactions {
 		// find the public key of the sender
 		key, err := StringToKey(bc.Chainstate.Wallets[tx.Sender].PublicKey)
 		if err != nil {
-			return false
+			return B_REJECT_TX_INVALID
 		}
 		// Verify the transaction
 		if !tx.Verify(key) {
-			return false
+			return B_REJECT_TX_INVALID
 		}
 		// Check that the transaction has the expected id
 		if tx.TXID != bc.Chainstate.Wallets[tx.Sender].TXC+1 {
-			return false
+			return B_REJECT_TX_INVALID
 		}
 		// Check if enough balance exists to make the transaction
 		if tx.Amount > bc.Chainstate.Wallets[tx.Sender].Amount {
-			return false
+			return B_REJECT_TX_INVALID
 		}
 	}
-	return true
+	return B_ACCEPT
 }
 
 func (bc *BlockChain) ProcessBlock(b model.Block) error {
@@ -136,10 +149,6 @@ func (bc *BlockChain) ProcessBlock(b model.Block) error {
 }
 
 func VerifyBlock(block model.Block) bool {
-	// We dont allow empty blocks
-	if len(block.Registrations) == 0 && len(block.Transactions) == 0 {
-		return false
-	}
 	// We dont accept blocks that miss vital parameters
 	if len(block.Hash) == 0 || len(block.Miner) == 0 || len(block.Previous) == 0 {
 		return false
